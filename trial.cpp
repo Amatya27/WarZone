@@ -1,3 +1,4 @@
+//Author: Amatya Katyayan
 #include <simplecpp>
 #include <iostream>
 #include <string>
@@ -19,6 +20,7 @@ class planeShape : public Polygon{
     setFill();
     setColor(COLOR("blue"));
  //      penDown();
+	  //Author: Amatya Katyayan
 }
 };
 
@@ -82,14 +84,14 @@ delay(500);
 cout<<"\n";
 if(cmd=='y'||cmd=='Y')
 {
-//if(getClick()!=0)
+//if(getClick()!=0) //Author: Amatya Katyayan
 //{
          cout<<"\n\n\n\n\t\t\t\t   LOADING.... "<<'\n'<<'\t'<<'\t';
     int g;
     for(g=1;g<=20;g++)
     {
         delay(200);
-        cout<<"²²";
+        cout<<"Â²Â²";
         //x=x+2;
 
     }
