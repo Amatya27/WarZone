@@ -114,7 +114,9 @@ function draw(t) {
   g.fillStyle = "#fbbf24"; g.shadowColor = "#fbbf24"; g.shadowBlur = 20; g.beginPath(); g.arc(beacon.x, beacon.y, 10, 0, 7); g.fill(); g.shadowBlur = 0;
 
   player.trail.forEach((p, i) => { g.fillStyle = `rgba(56,189,248,${(i + 1) / 20})`; g.beginPath(); g.arc(p.x - 16, p.y, 3 + i * 0.6, 0, 7); g.fill(); });
+  g.save(); rr(FIELD.x, FIELD.y, FIELD.w, FIELD.h, 14); g.clip();
   enemies.forEach(e => plane(e.x, e.y, Math.PI, "#f43f5e", "rgba(244,63,94,.8)"));
+  g.restore();
   if (state !== "over") plane(player.x, player.y, 0, "#38bdf8", "rgba(56,189,248,.9)");
   else {
     for (let i = 0; i < 10; i++) { const a = i / 10 * 6.28; g.fillStyle = i % 2 ? "#fb923c" : "#f43f5e"; g.beginPath(); g.arc(player.x + Math.cos(a) * 18, player.y + Math.sin(a) * 18, 7, 0, 7); g.fill(); }
