@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>War Zone | play in the browser</title>
+<meta name="description" content="Browser version of War Zone, my first-year C++ plane game: dodge the red jets and reach the beacon.">
+<style>
+  :root { --bg:#060b16; --panel:rgba(15,23,42,.82); --line:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --blue:#38bdf8; --red:#f43f5e; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(1200px 600px at 50% 0%, #0f1d3a, var(--bg)); color: var(--text); font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 14px; }
+  .wrap { position: relative; width: min(100%, calc((100vh - 170px) * 1.5)); }
+  canvas { display: block; width: 100%; aspect-ratio: 3 / 2; border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .pad { display: grid; grid-template-columns: repeat(3, 56px); gap: 8px; }
+  .pad button { height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: 600 15px inherit; cursor: pointer; }
+  .pad button:active { background: #1e293b; }
+  .pad .blank { visibility: hidden; }
+  p { margin: 0; color: var(--muted); font-size: 14px; text-align: center; }
+  kbd { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 1px 6px; color: var(--text); }
+  a { color: var(--blue); }
+</style>
+</head>
+<body>
+<div class="wrap"><canvas id="c" width="900" height="600" aria-label="War Zone game"></canvas></div>
+<div class="pad" aria-label="Controls">
+  <span class="blank"></span><button data-k="w" aria-label="Up">W</button><span class="blank"></span>
+  <button data-k="a" aria-label="Back">A</button><button data-k="s" aria-label="Down">S</button><button data-k="d" aria-label="Forward">D</button>
+</div>
+<p><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> (or arrow keys) to move, <kbd>X</kbd> to land. Every move you make, the enemy jets move too. <a href="https://github.com/Amatya27/WarZone">C++ original on GitHub</a></p>
+<script>
+// Same plane outline, canvas and step sizes as trial.cpp.
+const W = 900, H = 600;
+const FIELD = { x: 100, y: 75, w: 700, h: 450 };          // Rectangle r(450,300,700,450)
+const PLANE = [[10,0],[0,3],[-8,15],[-5,3],[-10,3],[-13,6],[-13,-6],[-10,-3],[-5,-3],[-8,-15],[0,-3],[10,0]];
+const STEP = { w: 60, s: 60, d: 70, a: 50 }, ENEMY_STEP = 75, SCALE = 2;
+const c = document.getElementById("c"), g = c.getContext("2d");
+
+let state, player, enemies, beacon, score, moves, best = Number(localStorage.getItem("warzone-best") || 0), flash = 0, stars;
+
+function rand(a, b) { return a + Math.random() * (b - a); }
+function spawnEnemy(x) { return { x: x ?? FIELD.x + FIELD.w + rand(20, 220), y: rand(FIELD.y + 30, FIELD.y + FIELD.h - 30) }; }
+function newBeacon() { return { x: rand(FIELD.x + FIELD.w * 0.6, FIELD.x + FIELD.w - 30), y: rand(FIELD.y + 40, FIELD.y + FIELD.h - 40) }; }
+
+function reset() {
+  state = "ready"; score = 0; moves = 0; flash = 0;
+  player = { x: FIELD.x + 70, y: H / 2, trail: [] };
+  enemies = [spawnEnemy(FIELD.x + FIELD.w - 40), spawnEnemy(FIELD.x + FIELD.w + 120), spawnEnemy(FIELD.x + FIELD.w + 260)];
+  beacon = { x: 800, y: 300 };                                 // Circle c1(800,300,10)
+  stars = Array.from({ length: 70 }, () => ({ x: rand(0, W), y: rand(0, H), r: rand(0.4, 1.6) }));
+}
+
+function move(k) {
+  if (state === "over" || state === "landed") { reset(); return; }
+  if (k === "x") { state = "landed"; return; }
+  if (!STEP[k]) return;
+  state = "playing"; moves++;
+  player.trail.push({ x: player.x, y: player.y });
+  if (player.trail.length > 6) player.trail.shift();
+  if (k === "w") player.y -= STEP.w;
+  if (k === "s") player.y += STEP.s;
+  if (k === "d") player.x += STEP.d;
+  if (k === "a") player.x -= STEP.a;
+  player.x = Math.max(FIELD.x + 20, Math.min(FIELD.x + FIELD.w - 20, player.x));
+  player.y = Math.max(FIELD.y + 20, Math.min(FIELD.y + FIELD.h - 20, player.y));
+
+  // Enemies fly straight at you, a little faster for every beacon you reach.
+  const speed = ENEMY_STEP * 0.5 * (1 + score * 0.1);
+  for (const e of enemies) {
+    e.x -= speed;
+    if (e.x < FIELD.x - 40) Object.assign(e, spawnEnemy());
+  }
+  if (enemies.some(e => Math.abs(e.x - player.x) < 40 && Math.abs(e.y - player.y) < 28)) {
+    state = "over"; flash = 1;
+    if (score > best) { best = score; localStorage.setItem("warzone-best", best); }
+    return;
+  }
+  if (Math.hypot(beacon.x - player.x, beacon.y - player.y) < 36) {
+    score++; beacon = newBeacon();
+    player.x = FIELD.x + 70; player.trail = [];
+  }
+}
+
+function plane(x, y, angle, color, glow) {
+  g.save(); g.translate(x, y); g.rotate(angle); g.scale(SCALE, SCALE);
+  g.shadowColor = glow; g.shadowBlur = 18;
+  g.beginPath(); PLANE.forEach(([px, py], i) => i ? g.lineTo(px, py) : g.moveTo(px, py)); g.closePath();
+  g.fillStyle = color; g.fill();
+  g.shadowBlur = 0; g.lineWidth = 0.8; g.strokeStyle = "rgba(255,255,255,.55)"; g.stroke();
+  g.restore();
+}
+
+function rr(x, y, w, h, r) { g.beginPath(); g.roundRect(x, y, w, h, r); }
+function label(t, x, y, size, color, align = "center", weight = 700) {
+  g.font = `${weight} ${size}px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif`;
+  g.fillStyle = color; g.textAlign = align; g.fillText(t, x, y);
+}
+function panel(x, y, w, h) { g.fillStyle = "rgba(15,23,42,.88)"; rr(x, y, w, h, 18); g.fill(); g.strokeStyle = "#334155"; g.lineWidth = 1; g.stroke(); }
+
+function draw(t) {
+  g.fillStyle = "#060b16"; g.fillRect(0, 0, W, H);
+  stars.forEach(s => { g.fillStyle = `rgba(226,232,240,${0.3 + 0.3 * Math.sin(t / 700 + s.x)})`; g.beginPath(); g.arc(s.x, s.y, s.r, 0, 7); g.fill(); });
+
+  const grd = g.createLinearGradient(FIELD.x, 0, FIELD.x + FIELD.w, 0);
+  grd.addColorStop(0, "rgba(56,189,248,.06)"); grd.addColorStop(1, "rgba(244,63,94,.06)");
+  g.fillStyle = grd; rr(FIELD.x, FIELD.y, FIELD.w, FIELD.h, 14); g.fill();
+  g.strokeStyle = "rgba(148,163,184,.35)"; g.lineWidth = 2; g.stroke();
+  g.strokeStyle = "rgba(148,163,184,.08)"; g.lineWidth = 1;
+  for (let x = FIELD.x + 50; x < FIELD.x + FIELD.w; x += 50) { g.beginPath(); g.moveTo(x, FIELD.y); g.lineTo(x, FIELD.y + FIELD.h); g.stroke(); }
+  for (let y = FIELD.y + 50; y < FIELD.y + FIELD.h; y += 50) { g.beginPath(); g.moveTo(FIELD.x, y); g.lineTo(FIELD.x + FIELD.w, y); g.stroke(); }
+
+  const pulse = 1 + 0.25 * Math.sin(t / 250);
+  g.fillStyle = "rgba(251,191,36,.18)"; g.beginPath(); g.arc(beacon.x, beacon.y, 26 * pulse, 0, 7); g.fill();
+  g.fillStyle = "#fbbf24"; g.shadowColor = "#fbbf24"; g.shadowBlur = 20; g.beginPath(); g.arc(beacon.x, beacon.y, 10, 0, 7); g.fill(); g.shadowBlur = 0;
+
+  player.trail.forEach((p, i) => { g.fillStyle = `rgba(56,189,248,${(i + 1) / 20})`; g.beginPath(); g.arc(p.x - 16, p.y, 3 + i * 0.6, 0, 7); g.fill(); });
+  enemies.forEach(e => plane(e.x, e.y, Math.PI, "#f43f5e", "rgba(244,63,94,.8)"));
+  if (state !== "over") plane(player.x, player.y, 0, "#38bdf8", "rgba(56,189,248,.9)");
+  else {
+    for (let i = 0; i < 10; i++) { const a = i / 10 * 6.28; g.fillStyle = i % 2 ? "#fb923c" : "#f43f5e"; g.beginPath(); g.arc(player.x + Math.cos(a) * 18, player.y + Math.sin(a) * 18, 7, 0, 7); g.fill(); }
+  }
+
+  panel(20, 18, 860, 44);
+  label("WAR ZONE", 40, 47, 18, "#e2e8f0", "left", 800);
+  label(`Beacons ${score}`, 520, 47, 16, "#fbbf24", "left");
+  label(`Moves ${moves}`, 650, 47, 16, "#94a3b8", "left");
+  label(`Best ${best}`, 860, 47, 16, "#38bdf8", "right");
+
+  if (state === "ready") {
+    panel(220, 205, 460, 200);
+    label("Reach the beacon.", 450, 260, 30, "#e2e8f0");
+    label("Dodge the red jets.", 450, 298, 30, "#f43f5e");
+    label("Every move you make, they move too.", 450, 340, 17, "#94a3b8", "center", 500);
+    label("Press W A S D to start", 450, 378, 16, "#38bdf8", "center", 600);
+  }
+  if (state === "over") {
+    if (flash > 0) { g.fillStyle = `rgba(244,63,94,${flash * 0.35})`; g.fillRect(0, 0, W, H); flash = Math.max(0, flash - 0.03); }
+    panel(250, 200, 400, 210);
+    label("Shot down!", 450, 255, 36, "#f43f5e");
+    label(`Beacons reached: ${score}`, 450, 300, 20, "#e2e8f0", "center", 600);
+    label(`Best: ${best}`, 450, 332, 18, "#38bdf8", "center", 600);
+    label("Press any key to fly again", 450, 380, 16, "#94a3b8", "center", 500);
+  }
+  if (state === "landed") {
+    panel(250, 190, 400, 230);
+    g.fillStyle = "#fbbf24"; g.beginPath(); g.arc(450, 260, 40, 0, 7); g.fill();
+    g.fillStyle = "#0f172a"; g.beginPath(); g.ellipse(437, 250, 4, 8, 0, 0, 7); g.ellipse(463, 250, 4, 8, 0, 0, 7); g.fill();
+    g.strokeStyle = "#0f172a"; g.lineWidth = 4; g.beginPath(); g.arc(450, 262, 20, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
+    label("Hope you enjoyed the game!", 450, 345, 22, "#e2e8f0");
+    label("Press any key to fly again", 450, 385, 16, "#94a3b8", "center", 500);
+  }
+  requestAnimationFrame(draw);
+}
+
+const KEYS = { ArrowUp: "w", ArrowDown: "s", ArrowLeft: "a", ArrowRight: "d" };
+addEventListener("keydown", e => {
+  const k = KEYS[e.key] || e.key.toLowerCase();
+  if (KEYS[e.key]) e.preventDefault();
+  if ("wasdx".includes(k) || state === "over" || state === "landed") move(k);
+});
+document.querySelectorAll(".pad button").forEach(b => b.addEventListener("pointerdown", e => { e.preventDefault(); move(b.dataset.k); }));
+
+reset();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
